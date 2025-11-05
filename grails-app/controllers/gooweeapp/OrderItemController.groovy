@@ -1,0 +1,171 @@
+package gooweeapp
+
+import goowee.commons.utils.LogUtils
+import goowee.elements.components.TableRow
+import goowee.elements.contents.ContentCreate
+import goowee.elements.contents.ContentEdit
+import goowee.elements.contents.ContentTable
+import goowee.elements.controls.MoneyField
+import goowee.elements.controls.QuantityField
+import goowee.elements.controls.Select
+import goowee.elements.controls.TextField
+import goowee.elements.ElementsController
+import goowee.elements.style.TextDefault
+import goowee.types.QuantityUnit
+import grails.plugin.springsecurity.annotation.Secured
+import groovy.util.logging.Slf4j
+import jakarta.annotation.PostConstruct
+
+@Slf4j
+@Secured(['ROLE_USER', /* other ROLE_... */])
+class OrderItemController implements ElementsController {
+
+    ProductService productService
+    OrderItemService orderItemService
+
+    @PostConstruct
+    void init() {
+        // Executes only once when the application starts
+    }
+
+    def handleException(Exception e) {
+        // Display a popup message instead of the "Error" screen
+        log.error LogUtils.logStackTrace(e)
+        display exception: e
+    }
+
+    def index() {
+        def c = createContent(ContentTable)
+        c.table.with {
+            filters.with {
+                addField(
+                        class: TextField,
+                        id: 'find',
+                        label: TextDefault.FIND,
+                        cols: 12,
+                )
+            }
+            sortable = [
+                    dateCreated: 'desc',
+            ]
+            columns = [
+                    'supplier',
+                    'client',
+                    'ref',
+                    'subject',
+                    'total',
+            ]
+
+            body.eachRow { TableRow row, Map values ->
+                // Do not execute slow operations here to avoid slowing down the table rendering
+            }
+        }
+
+        c.table.body = orderItemService.list(c.table.filterParams, c.table.fetchParams)
+        c.table.paginate = orderItemService.count(c.table.filterParams)
+
+        display content: c
+    }
+
+    private buildForm(TOrderItem obj = null, Boolean readonly = false) {
+        def c = obj
+                ? createContent(ContentEdit)
+                : createContent(ContentCreate)
+
+        if (params.embeddedController) {
+            c.header.addCancelButton(
+                    controller: params.embeddedController ?: controllerName,
+                    action: params.embeddedAction ?: 'index',
+                    params: [id: params.embeddedId],
+            )
+        }
+
+        if (readonly) {
+            c.header.removeNextButton()
+            c.form.readonly = true
+        }
+
+        c.form.with {
+            validate = TOrderItem
+            addKeyField('embeddedController')
+            addKeyField('embeddedAction')
+            addKeyField('embeddedId')
+            addField(
+                    class: Select,
+                    id: 'product',
+                    optionsFromRecordset: productService.list(),
+                    cols: 6,
+            )
+            addField(
+                    class: QuantityField,
+                    id: 'quantity',
+                    defaultUnit: QuantityUnit.PCS,
+                    cols: 3,
+            )
+            addField(
+                    class: MoneyField,
+                    id: 'unitPrice',
+                    cols: 3,
+            )
+        }
+
+        if (obj) {
+            c.form.values = obj
+        }
+
+        return c
+    }
+
+    def create() {
+        def c = buildForm()
+        display content: c, modal: true
+    }
+
+    def onCreate() {
+        def obj = orderItemService.create(params)
+        if (obj.hasErrors()) {
+            display errors: obj
+            return
+        }
+
+        if (params.embeddedController) {
+            display controller: params.embeddedController, action: params.embeddedAction, params: [id: params.embeddedId], modal: true
+        } else {
+            display action: 'index'
+        }
+    }
+
+    def edit() {
+        def obj = orderItemService.get(params.id)
+        def c = buildForm(obj)
+        display content: c, modal: true, closeButton: false
+    }
+
+    def onEdit() {
+        def obj = orderItemService.update(params)
+        if (obj.hasErrors()) {
+            display errors: obj
+            return
+        }
+
+        if (params.embeddedController) {
+            display controller: params.embeddedController, action: params.embeddedAction, params: [id: params.embeddedId], modal: true
+        } else {
+            display action: 'index'
+        }
+    }
+
+    def onDelete() {
+        try {
+            orderItemService.delete(params.id)
+            if (params.embeddedController) {
+                display controller: params.embeddedController, action: params.embeddedAction, params: [id: params.embeddedId], modal: true
+            } else {
+                display action: 'index'
+            }
+
+        } catch (e) {
+            display exception: e
+        }
+    }
+}

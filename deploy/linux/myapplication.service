@@ -1,0 +1,15 @@
+# Copy to: /etc/systemd/system
+
+[Unit]
+Description=gooweeapp
+After=syslog.target
+
+[Service]
+User=gooweeapp
+WorkingDirectory=/home/gooweeapp
+ExecStart=/bin/bash /home/gooweeapp/start
+ExecStop=/bin/bash /home/gooweeapp/stop
+SuccessExitStatus=143
+
+[Install]
+WantedBy=multi-user.target
